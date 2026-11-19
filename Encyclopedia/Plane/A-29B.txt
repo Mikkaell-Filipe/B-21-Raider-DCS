@@ -1,0 +1,78 @@
+a-29b
+Plane/A-29_Super_Tucano.png
+a-29b
+
+ENGLISH
+
+Name: A-29 Super Tucano
+Type: Light Attack Aircraft / Advanced Trainer / ISR Aircraft
+
+General characteristics
+
+Crew: 2 (student and instructor)
+Length: 11.38 m (37 ft 4 in)
+Wingspan: 11.14 m (36 ft 7 in)
+Height: 3.97 m (13 ft 0 in)
+Wing area: 19.40 m² (208.8 ft²)
+
+Empty weight:
+3,200 kg (7,055 lb)
+
+Loaded weight:
+4,600 kg (10,141 lb)
+
+Max. takeoff weight:
+5,400 kg (11,905 lb)
+
+Powerplant:
+1 × Pratt & Whitney Canada PT6A-68C turboprop
+Power output: 1,600 shp
+
+Performance
+
+Maximum speed:
+590 km/h (320 knots, 366 mph)
+
+Cruise speed:
+520 km/h (280 knots, 323 mph)
+
+Combat radius:
+550 km (297 nmi, 342 mi)
+
+Ferry range:
+1,330 km (718 nmi, 826 mi)
+
+Endurance:
+Up to 6 hours with external fuel tanks
+
+Service ceiling:
+10,670 m (35,000 ft)
+
+Rate of climb:
+20 m/s (3,940 ft/min)
+
+Armament
+
+Guns:
+2× 12.7 mm (.50 in) FN Herstal M3P machine guns, 200 rounds per gun
+
+Hardpoints:
+5 external hardpoints (one centerline and four underwing) with a total payload capacity of up to 1,550 kg (3,417 lb), capable of carrying combinations of:
+
+Rockets:
+70 mm rocket pods
+
+Bombs:
+Unguided and guided bombs (Mk 81/82, laser-guided bombs)
+
+Missiles:
+Air-to-air missiles (AIM-9 Sidewinder), air-to-ground missiles
+
+Other:
+Reconnaissance pods, targeting pods, and external fuel tanks
+
+Description
+
+The Embraer A-29 Super Tucano is a turboprop light attack and advanced training aircraft developed from the EMB-312 Tucano. Designed for counterinsurgency, close air support, border surveillance, and pilot training, the aircraft combines rugged construction with modern avionics and low operating costs. It is capable of operating from short and unprepared runways and is optimized for missions in austere environments.
+
+The A-29 features reinforced landing gear, armor protection for crew and critical systems, night-vision compatible cockpit, and advanced sensors. Its combat-proven performance has led to adoption by numerous air forces worldwide, making it one of the most successful light attack aircraft of its class.

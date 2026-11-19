@@ -1,0 +1,19 @@
+wave = "Effects/Aircrafts/Engines/B-21/b21_engine_ext_around_hi"
+
+pitch = 1.0
+
+gain = 6.0
+attack = 0.4
+release = 0.4
+
+-- metros
+silent_radius = 0
+peak_radius = 250
+inner_radius = 200
+outer_radius = 900
+
+-- {FRENTE-TRAS, CIMA-BAIXO, DIREITA-ESQUERDA} a partir da origem do modelo
+position = {-3.0, 0, 0}
+
+nodoppler = false
+auto_width = true

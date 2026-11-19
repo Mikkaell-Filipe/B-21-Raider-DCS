@@ -1,0 +1,3 @@
+B-21 Raider
+Strategic stealth bomber (flying wing), 2 x turbofan, 2 internal weapon bays.
+Flight model: External FM (B21_EFM.dll) - FBW/SAS, split-drag rudders, auto-trim 1 g.

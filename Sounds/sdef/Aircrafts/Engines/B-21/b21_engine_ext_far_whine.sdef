@@ -1,0 +1,19 @@
+wave = "Effects/Aircrafts/Engines/B-21/b21_engine_ext_far_whine"
+
+pitch = 1.0
+
+gain = 5.0
+attack = 0.4
+release = 0.4
+
+-- metros
+silent_radius = 800
+peak_radius = 1500
+inner_radius = 1200
+outer_radius = 6000
+
+-- {FRENTE-TRAS, CIMA-BAIXO, DIREITA-ESQUERDA} a partir da origem do modelo
+position = {-3.0, 0, 0}
+
+nodoppler = false
+auto_width = true

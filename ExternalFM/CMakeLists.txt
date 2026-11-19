@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.20)
+project(B21_EFM LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_library(B21_EFM SHARED B21_EFM/B21_EFM.cpp)
+target_include_directories(B21_EFM PRIVATE B21_EFM include)
+set_target_properties(B21_EFM PROPERTIES PREFIX "" OUTPUT_NAME "B21_EFM"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../bin"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/../bin")
+if(MSVC)
+  set_property(TARGET B21_EFM PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+  target_compile_options(B21_EFM PRIVATE /O2 /W3)
+endif()

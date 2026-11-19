@@ -1,0 +1,24 @@
+wave = "Effects/Aircrafts/Engines/B-21/b21_engine_ext_far_roar"
+
+pitch = 1.0
+
+gain = 6.0
+attack = 0.4
+release = 0.4
+
+-- metros
+silent_radius = 600
+peak_radius = 1500
+inner_radius = 1200
+outer_radius = 6000
+
+-- {FRENTE-TRAS, CIMA-BAIXO, DIREITA-ESQUERDA} a partir da origem do modelo
+position = {-1.0, 0, 0}
+direction = {1, 0, 0}
+cone_inner_angle = 70
+cone_outer_angle = 130
+cone_inner_gain = 0.9
+cone_outer_gain = 0.05
+
+nodoppler = false
+auto_width = true
