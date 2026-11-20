@@ -34,6 +34,7 @@ namespace A = B21::Aerodata;
 namespace Cmd
 {
     constexpr int PITCH = 2001, ROLL = 2002, YAW = 2003, THROTTLE = 2004;
+    constexpr bool kBayExclusive = true; 
     constexpr int BRAKE_AXIS = 2111, BRAKE_AXIS_L = 2112, BRAKE_AXIS_R = 2113;
     constexpr int GEAR_TOGGLE = 68, GEAR_UP = 430, GEAR_DOWN = 431;
     constexpr int AIRBRAKE_TOGGLE = 73, AIRBRAKE_ON = 147, AIRBRAKE_OFF = 148;
@@ -53,27 +54,43 @@ namespace Cmd
     constexpr int LAND_LIGHT = 10013, TAXI_LIGHT = 10014, BEACON_LIGHT = 10015;
     constexpr int NWS_TOGGLE = 10016, SAS_TOGGLE = 10017;
     constexpr int TRIM_UP = 10018, TRIM_DOWN = 10019, TRIM_RESET = 10020;
+    constexpr int BAY_L_TOGGLE = 10021, BAY_R_TOGGLE = 10022, BAY_CLOSE_ALL = 10023;
 }
 
-// Draw args do B-21.edm (tabela do usuario)
+// Draw args do EXTERNO (B-21.edm). So args < 500: a faixa 500-722 e do COCKPIT.
+// -1..+1 = bordo de fuga p/ cima..baixo ; 0..1 = recolhido/fechado..estendido/aberto
 namespace Arg
 {
-    // Args reais do externo.blend (B-21.edm). PATCH: antes usava args que o modelo nao tem.
     constexpr int NOSE_GEAR = 0;
-    constexpr int R_GEAR = 3, L_GEAR = 5;
-    constexpr int NOSE_STEER = 2, NOSE_STEER_MODEL = 506;   // 2 = padrao DCS, 506 = c_wheel do modelo
-    // No modelo, 11/15 sao ESQUERDOS e 12/16 DIREITOS (inverso do que o EFM assumia)
-    constexpr int L_AILERON = 11, R_AILERON = 12;
-    constexpr int L_ELEVATOR = 15, R_ELEVATOR = 16;
-    constexpr int RUDDER = 17;                               // LeftRudder + RightRudder no mesmo arg
+    constexpr int R_GEAR = 3, L_GEAR = 5;            // padrao DCS: 3 = direito, 5 = esquerdo
+    constexpr int NOSE_STEER = 2;
+    constexpr int R_AILERON = 11, L_AILERON = 12;   // padrao DCS: 11/15 direitos, 12/16 esquerdos
+    constexpr int R_ELEVATOR = 15, L_ELEVATOR = 16;
+    constexpr int SPLIT_R = 17, SPLIT_L = 18;        // split-drag rudders 0..1
     constexpr int REVO = 22;
-    constexpr int BAY_L = 500, BAY_R = 501;
-    constexpr int SPOILER_L = 502, SPOILER_R = 503;
-    constexpr int LAUNCH_BAR = 504;
+    constexpr int BAY = 26;                          // baia de bombas (as 2 portas no mesmo arg)
+    constexpr int STAIRS = 38;
     constexpr int LIGHT_BEACON = 193, LIGHT_LANDING = 208, LIGHT_TAXI = 209;
-    // Ajuste se a animacao do Blender estiver invertida
-    constexpr double AILERON_SIGN = +1.0;   // +1 = bordo de fuga para baixo
-    constexpr double ELEVATOR_SIGN = -1.0;  // elevon interno: cabrar = -(TE baixo)
+    constexpr double AILERON_SIGN = +1.0;            // +1 = bordo de fuga para baixo
+    constexpr double ELEVATOR_SIGN = +1.0;
+}
+
+#include <cstdarg>
+namespace
+{
+    char g_logPath[600] = { 0 };
+    void dbgLog(const char* fmt, ...)
+    {
+        static FILE* f = nullptr;
+        if (!f)
+        {
+            if (g_logPath[0]) f = std::fopen(g_logPath, "a");
+            if (!f) f = std::fopen("B21_EFM_debug.log", "a");
+            if (!f) return;
+        }
+        va_list ap; va_start(ap, fmt); std::vfprintf(f, fmt, ap); va_end(ap);
+        std::fputc('\n', f); std::fflush(f);   // flush a cada linha: sobrevive a crash
+    }
 }
 
 namespace
@@ -165,7 +182,8 @@ namespace
         double trimManual = 0.0;
         double elevonL = 0, elevonR = 0, splitL = 0, splitR = 0;
         double gearTarget = 1, gearPos = 1, gearDoor = 0;
-        double bayTarget = 0, bayPos = 0, stairsTarget = 0, stairsPos = 0, revoTarget = 0, revoPos = 0;
+        double bayTargetL = 0, bayTargetR = 0, bayPosL = 0, bayPosR = 0, stairsTarget = 0, stairsPos = 0, revoTarget = 0, revoPos = 0;
+        double bayAvg() const { return 0.5 * (bayPosL + bayPosR); }
         bool nws = true;
         double nwsAngle = 0;
         bool landLight = false, taxiLight = false, beacon = false;
@@ -185,7 +203,7 @@ namespace
             brakeL = brakeR = 0.0; brakeKey = parkBrake = false;
             speedBrakeTarget = 0.0; sas = true; trimManual = 0.0;
             elevonL = elevonR = splitL = splitR = 0.0;
-            bayTarget = bayPos = stairsTarget = stairsPos = revoTarget = revoPos = 0.0;
+            bayTargetL = bayTargetR = bayPosL = bayPosR = stairsTarget = stairsPos = revoTarget = revoPos = 0.0;
             nws = true; nwsAngle = 0.0;
             landLight = taxiLight = beacon = false;
             wingL = wingR = elevonDmgL = elevonDmgR = 1.0;
@@ -233,7 +251,8 @@ namespace
         const bool moving = std::abs(m.gearPos - m.gearTarget) > 1.0e-4;
         const bool fullyUp = m.gearPos < 0.001;
         m.gearDoor = slew(m.gearDoor, (moving || !fullyUp) ? 1.0 : 0.0, dt / kDoorTravelTime);
-        m.bayPos = slew(m.bayPos, m.bayTarget, dt / kBayTravelTime);
+        m.bayPosL = slew(m.bayPosL, m.bayTargetL, dt / kBayTravelTime);
+        m.bayPosR = slew(m.bayPosR, m.bayTargetR, dt / kBayTravelTime);
         m.stairsPos = slew(m.stairsPos, m.stairsTarget, dt / kStairsTravelTime);
         m.revoPos = slew(m.revoPos, m.revoTarget, dt / kRevoTravelTime);
         const double limit = 45.0 * A::kDegToRad;
@@ -283,7 +302,7 @@ namespace
             const double qdyn = std::max(0.5 * m.density * V * V, 50.0);
             const double clReq = m.mass * A::kGravity / (qdyn * A::kWingArea);
             const double cmExtra = -0.008 * m.gearPos
-                                 - (((m.mass - kEmptyMass - m.fuelKg) > 800.0) ? 0.012 : 0.006) * m.bayPos;
+                                 - (((m.mass - kEmptyMass - m.fuelKg) > 800.0) ? 0.012 : 0.006) * m.bayAvg();
             auto trimDelta = [&](double a) {
                 const double cm = A::bilerpClamped(A::kMachGrid, A::kAlphaRadGrid, A::kCmTable, m.mach, a) + cmExtra;
                 return clampd(cm / 1.10, -14.0 * A::kDegToRad, 14.0 * A::kDegToRad);
@@ -336,7 +355,7 @@ namespace
         c.split_rudder_left_rad = m.splitL * A::kMaxSplitRudderRad;
         c.split_rudder_right_rad = m.splitR * A::kMaxSplitRudderRad;
         c.gear_norm = m.gearPos;
-        c.bay_door_norm = m.bayPos;
+        c.bay_door_norm = m.bayAvg();
         c.bay_has_stores = (m.mass - kEmptyMass - m.fuelKg) > 800.0;
         c.use_ground_effect = true;
 
@@ -356,7 +375,14 @@ namespace
             M[1] += kEnginePos[i][2] * T;
             M[2] += -kEnginePos[i][1] * T;
         }
-        for (int k = 0; k < 3; ++k) { m.F[k] = F[k]; m.M[k] = M[k]; }
+        bool bad = false;
+        for (int k = 0; k < 3; ++k) { if (!std::isfinite(F[k]) || !std::isfinite(M[k])) bad = true; }
+        if (bad) dbgLog("NaN/Inf em F/M: zerado");
+        for (int k = 0; k < 3; ++k)
+        {
+            m.F[k] = bad ? 0.0 : clampd(F[k], -6.0e7, 6.0e7);
+            m.M[k] = bad ? 0.0 : clampd(M[k], -2.0e8, 2.0e8);
+        }
         m.shake = clampd(0.002 + 0.00001 * q * (1.0 + 3.0 * (m.alpha > 12.0 * A::kDegToRad)), 0.0, 0.25);
     }
 }
@@ -379,6 +405,16 @@ void ed_fm_simulate(double dt)
 {
     if (dt <= 0.0) return;
     g.simTime += dt;
+    {
+        static double lastLog = -1.0;
+        if (g.simTime - lastLog >= 1.0)
+        {
+            lastLog = g.simTime;
+            dbgLog("t=%.1f alt=%.1f agl=%.1f tas=%.1f M=%.2f aoa=%.1f gear=%.2f bay=%.2f F=(%.0f %.0f %.0f) M=(%.0f %.0f %.0f)",
+                   g.simTime, g.altitude_m, g.agl_m, g.tas, g.mach, g.alpha * A::kRadToDeg, g.gearPos, g.bayAvg(),
+                   g.F[0], g.F[1], g.F[2], g.M[0], g.M[1], g.M[2]);
+        }
+    }
     updateControls(dt);
     updateGear(dt);
     updateEngines(dt);
@@ -390,6 +426,7 @@ void ed_fm_set_surface(double h, double, unsigned, double, double, double) { g.s
 
 void ed_fm_set_atmosphere(double h, double t, double a, double ro, double p, double, double, double)
 {
+    if (!std::isfinite(h) || !std::isfinite(ro) || ro <= 0.0 || !std::isfinite(t) || t < 150.0) return;
     g.altitude_m = h; g.temperature_K = t;
     g.sound_speed = (a > 100.0) ? a : 340.29;
     g.density = ro; g.pressure = p;
@@ -409,6 +446,7 @@ void ed_fm_set_current_state_body_axis(double, double ay, double,
                                        double omegax, double omegay, double omegaz,
                                        double, double, double, double, double)
 {
+    if (!std::isfinite(vx + vy + vz + wx + wy + wz + omegax + omegay + omegaz + ay)) return;
     g.nzBody = ay / A::kGravity;
     const double ux = vx - wx, uy = vy - wy, uz = vz - wz;   // velocidade relativa ao ar
     g.vx = ux; g.vy = uy; g.vz = uz;
@@ -478,7 +516,17 @@ void ed_fm_set_command(int command, float value)
     case Cmd::BRAKES_ON:  m.brakeKey = true; break;
     case Cmd::BRAKES_OFF: m.brakeKey = false; break;
     case Cmd::PARK_BRAKE: m.parkBrake = !m.parkBrake; break;
-    case Cmd::BAY_TOGGLE:    m.bayTarget = (m.bayTarget > 0.5) ? 0.0 : 1.0; break;
+    case Cmd::BAY_L_TOGGLE:
+        m.bayTargetL = (m.bayTargetL > 0.5) ? 0.0 : 1.0;
+        if (Cmd::kBayExclusive && m.bayTargetL > 0.5) m.bayTargetR = 0.0;
+        break;
+    case Cmd::BAY_R_TOGGLE:
+        m.bayTargetR = (m.bayTargetR > 0.5) ? 0.0 : 1.0;
+        if (Cmd::kBayExclusive && m.bayTargetR > 0.5) m.bayTargetL = 0.0;
+        break;
+    case Cmd::BAY_CLOSE_ALL:
+        m.bayTargetL = m.bayTargetR = 0.0;
+        break;
     case Cmd::STAIRS_TOGGLE: if (m.onGround && m.tas < 3.0) m.stairsTarget = (m.stairsTarget > 0.5) ? 0.0 : 1.0; break;
     case Cmd::REVO_TOGGLE:   m.revoTarget = (m.revoTarget > 0.5) ? 0.0 : 1.0; break;
     case Cmd::LAND_LIGHT:    m.landLight = !m.landLight; break;
@@ -512,38 +560,67 @@ void ed_fm_set_external_fuel(int, double, double, double, double) {}
 double ed_fm_get_external_fuel() { return 0.0; }
 void ed_fm_refueling_add_fuel(double fuel) { g.fuelKg += fuel; }
 
+namespace
+{
+    struct ArgRange { double closed, open; };
+    inline double toArg(const ArgRange& r, double pos01) { return r.closed + pos01 * (r.open - r.closed); }
+    inline double symToArg(double v, double lo, double hi)
+    { return lo + 0.5 * (clampd(v, -1.0, 1.0) + 1.0) * (hi - lo); }   // -1..+1 -> lo..hi, 0 -> meio
+
+    constexpr ArgRange kGearRange  = { -1.0,  0.0 };   // -1 recolhido, 0 baixado
+    constexpr ArgRange kBayRange   = {  1.0,  0.0 };   // closed=1, open=0 (confirmar no viewer)
+    constexpr ArgRange kSplitRange = { -1.0,  1.0 };   // provisorio
+    constexpr ArgRange kRevoRange  = { -1.0,  1.0 };   // provisorio
+    constexpr double kAileronLo = 0.0, kAileronHi = 1.0;   // frames 0..100, neutro = 0.5
+
+    // Args do modelo (o 11 e o 15 sao os do lado ESQUERDO, segundo a tabela)
+    constexpr size_t kArgNoseGear = 0, kArgRightGear = 3, kArgLeftGear = 5;
+    constexpr size_t kArgAileronL = 11, kArgAileronR = 12;
+    constexpr size_t kArgElevatorL = 15, kArgElevatorR = 16;
+    constexpr size_t kArgSplit = 17, kArgRevo = 22;
+    constexpr size_t kArgBayL = 500, kArgBayR = 501;
+}
+
 void ed_fm_set_draw_args(EdDrawArgument* d, size_t size)
 {
-    Model& m = g;
-    auto set = [&](size_t i, double v) { if (i < size) d[i].f = static_cast<float>(v); };
+    const Model& m = g;
+    auto set = [&](size_t i, double v)
+    {
+        if (i >= size) return;
+        d[i].f = static_cast<float>(std::isfinite(v) ? v : 0.0);
+    };
 
-    set(Arg::NOSE_GEAR, m.gearPos); set(Arg::R_GEAR, m.gearPos); set(Arg::L_GEAR, m.gearPos);
-    const double steer = clampd(m.nwsAngle / (45.0 * A::kDegToRad), -1.0, 1.0);
-    set(Arg::NOSE_STEER, steer); set(Arg::NOSE_STEER_MODEL, steer);
+    // Trem (o DCS nao deve escrever nestes args: arg_post = -1 em Suspension.lua)
+    const double gear = toArg(kGearRange, m.gearPos);
+    set(kArgNoseGear,  gear);
+    set(kArgRightGear, gear);
+    set(kArgLeftGear,  gear);
 
-    set(Arg::R_AILERON,  Arg::AILERON_SIGN  * m.elevonR);
-    set(Arg::L_AILERON,  Arg::AILERON_SIGN  * m.elevonL);
-    set(Arg::R_ELEVATOR, Arg::ELEVATOR_SIGN * m.elevonR);
-    set(Arg::L_ELEVATOR, Arg::ELEVATOR_SIGN * m.elevonL);
+    // Ailerons: frames 0..100, neutro = 0.5
+    set(kArgAileronL, symToArg(Arg::AILERON_SIGN * m.elevonL, kAileronLo, kAileronHi));
+    set(kArgAileronR, symToArg(Arg::AILERON_SIGN * m.elevonR, kAileronLo, kAileronHi));
 
-    set(Arg::RUDDER, 0.5 * (m.splitL + m.splitR));
-    set(Arg::SPOILER_L, m.splitL); set(Arg::SPOILER_R, m.splitR);
+    // Profundores: so a troca de lado por enquanto (faixa 1..3 a confirmar)
+    set(kArgElevatorL, Arg::ELEVATOR_SIGN * m.elevonL);
+    set(kArgElevatorR, Arg::ELEVATOR_SIGN * m.elevonR);
 
-    set(Arg::BAY_L, m.bayPos); set(Arg::BAY_R, m.bayPos);
-    set(Arg::LAUNCH_BAR, 0.0);
-    set(Arg::REVO, m.revoPos);
-
-    const double beaconOn = m.beacon ? ((std::fmod(m.beaconTimer, 0.85) < 0.12) ? 1.0 : 0.0) : 0.0;
-    set(Arg::LIGHT_LANDING, m.landLight ? 1.0 : 0.0);
-    set(Arg::LIGHT_TAXI, m.taxiLight ? 1.0 : 0.0);
-    set(Arg::LIGHT_BEACON, beaconOn);
+    // Baia (uma porta por arg), split-drag rudder e receptaculo REVO
+    set(kArgBayL, toArg(kBayRange, m.bayPosL));
+    set(kArgBayR, toArg(kBayRange, m.bayPosR));
+    set(kArgSplit, toArg(kSplitRange, m.splitR));   // o modelo so tem o arg 17
+    set(kArgRevo,  toArg(kRevoRange,  m.revoPos));
 }
 
 void ed_fm_set_fc3_cockpit_draw_args(EdDrawArgument*, size_t) {}
 double ed_fm_get_shake_amplitude() { return g.shake; }
 void ed_fm_configure(const char*) {}
 void ed_fm_release() {}
-void ed_fm_set_plugin_data_install_path(const char* p) { if (p) std::strncpy(g.installPath, p, sizeof(g.installPath) - 1); }
+void ed_fm_set_plugin_data_install_path(const char* p)
+{
+    if (p) std::strncpy(g.installPath, p, sizeof(g.installPath) - 1);
+    std::snprintf(g_logPath, sizeof(g_logPath), "%s/b21_efm_debug.log", g.installPath);
+    dbgLog("=== B21_EFM 1.2.0 carregada (build %s %s) ===", __DATE__, __TIME__);
+}
 void ed_fm_on_planned_failure(const char*) {}
 bool ed_fm_enable_debug_info() { return false; }
 size_t ed_fm_debug_watch(int, char*, size_t) { return 0; }
@@ -571,6 +648,16 @@ void ed_fm_on_damage(int element, double integrity)
 }
 
 bool ed_fm_pop_simulation_event(ed_fm_simulation_event&) { return false; }
+
+void ed_fm_suspension_feedback(int idx, const ed_fm_suspension_info* info)
+{
+    if (!info) return;
+    static double lastT = -10.0;
+    if (g.simTime - lastT < 0.5) return;
+    lastT = g.simTime;
+    dbgLog("susp[%d] comp=%.3f integ=%.2f F=(%.0f %.0f %.0f) wheelV=%.1f", idx, info->struct_compression,
+           info->integrity_factor, info->acting_force[0], info->acting_force[1], info->acting_force[2], info->wheel_speed_X);
+}
 
 static double engineParam(int n, int off)
 {
@@ -644,7 +731,7 @@ void ed_fm_hot_start_in_air()
     g.throttleCmd = 0.6;
 }
 
-B21_API const char* b21_efm_version() { return "B21_EFM 1.1.0"; }
+B21_API const char* b21_efm_version() { return "B21_EFM 1.2.0"; }
 
 #else
 // Teste standalone: g++ -std=c++17 -DB21_STANDALONE_TEST B21_EFM.cpp

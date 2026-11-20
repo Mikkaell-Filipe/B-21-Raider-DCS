@@ -99,14 +99,13 @@ suspension =
         noise_k                              = 0.40,
         damper_coeff                         = 150.0,
 
-        arg_post                             = 0,
+        arg_post                             = -1,
         arg_amortizer                        = 1,
         arg_wheel_rotation                   = 76,
         arg_wheel_yaw                        = 2,
         collision_shell_name                 = "WHEEL_F",
     },
     -- [2] PRINCIPAL ESQUERDO (LEFT_WHEEL)  raw(3.7405, -1.8689, 1.6836) -> DCS(-1.6836, -1.8689, -3.7405)
-    main_gear({ -1.6836, -1.8689, -3.7405 }, 84, 5, 6, 77, "WHEEL_L"),
-    -- [3] PRINCIPAL DIREITO (RIGHT_WHEEL)  raw(-3.7359, -1.8231, 1.6915) -> DCS(-1.6915, -1.8231, 3.7359)
-    main_gear({ -1.6915, -1.8231, 3.7359 }, 85, 3, 4, 78, "WHEEL_R"),
+    main_gear({ -1.6836, -1.8689, -3.7405 }, 84, -1, 6, 77, "WHEEL_L"),   -- era 5
+    main_gear({ -1.6915, -1.8231,  3.7359 }, 85, -1, 4, 78, "WHEEL_R"),   -- era 3
 }
